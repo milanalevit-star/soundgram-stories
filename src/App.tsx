@@ -1,14 +1,7 @@
 import { useState } from "react";
 import "./App.css";
 
-import {
-  genreAura,
-  topArtists,
-  genreAuraEva,
-  topArtistsEva,
-  genreAuraAlya,
-  topArtistsAlya,
-} from "./mockData";
+import { genreAura, topArtists } from "./mockData";
 
 import StoryCard from "./components/StoryCard";
 
@@ -33,13 +26,6 @@ function App() {
   const [profileId, setProfileId] = useState<string | null>(
     getProfileIdFromTelegram
   );
-
-  // Выбранный музыкальный профиль
-  const [selectedProfile, setSelectedProfile] =
-  useState<"me" | "eva" | "alya">("me");
-
-  const isEva = selectedProfile === "eva";
-  const isAlya = selectedProfile === "alya";
 
   return (
     <div className="app">
@@ -69,70 +55,14 @@ function App() {
         </div>
       ) : (
         <>
-          <div className="profile-switcher">
-            <button
-              type="button"
-              onClick={() => setSelectedProfile("me")}
-            >
-              Моя аура
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setSelectedProfile("eva")}
-            >
-              Аура Евочки
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setSelectedProfile("alya")}
-            >
-              Аура Али
-            </button>
-          </div>
-
           <StoryCard
-
-            avatarUrl={selectedProfile === "me" ? user?.photo_url ?? null : null}
-
-            tracksCount={
-              isEva
-                ? 630
-                : isAlya
-                  ? 1090
-                  : 178
-            }
-
-            name={
-              isEva
-                ? "Евочка"
-                : isAlya
-                  ? "Аля"
-                  : user?.first_name ?? "Гость"
-            }
-            username={
-              isEva
-                ? "ellviitt"
-                : isAlya
-                  ? "aalkkkkk"
-                  : user?.username ?? ""
-            }
-            genreAura={
-              isEva
-                ? genreAuraEva
-                : isAlya
-                  ? genreAuraAlya
-                  : genreAura
-            }
-            topArtists={
-              selectedProfile === "me"
-                ? topArtists
-                : selectedProfile === "eva"
-                  ? topArtistsEva
-                  : topArtistsAlya
-            }
-            canShare={selectedProfile === "me"}
+            avatarUrl={user?.photo_url ?? null}
+            tracksCount={178}
+            name={user?.first_name ?? "Гость"}
+            username={user?.username ?? ""}
+            genreAura={genreAura}
+            topArtists={topArtists}
+            canShare={true}
           />
         </>
       )}
