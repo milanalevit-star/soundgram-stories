@@ -236,9 +236,10 @@ async function createStoryPng(
 
   for (const img of images) {
     if (!img.complete || img.naturalWidth === 0) {
-      throw new Error(
-        `Фотография не загрузилась: ${img.alt}`
+      console.warn(
+        `Пропускаем незагруженную фотографию: ${img.alt}`
       );
+      continue;
     }
 
     const rect = img.getBoundingClientRect();
@@ -295,6 +296,56 @@ async function createStoryPng(
     ctx.restore();
   }
 
+    const avatarPlaceholders = Array.from(
+      card.querySelectorAll<HTMLElement>(".artist-avatar span")
+    );
+
+    for (const placeholder of avatarPlaceholders) {
+      const rect = placeholder.parentElement?.getBoundingClientRect();
+
+      if (!rect) continue;
+
+      const x = (rect.left - cardRect.left) * scaleX;
+      const y = (rect.top - cardRect.top) * scaleY;
+
+      const width = rect.width * scaleX;
+      const height = rect.height * scaleY;
+
+      const centerX = x + width / 2;
+      const centerY = y + height / 2;
+      const radius = Math.min(width, height) / 2;
+
+      ctx.save();
+
+      const avatarElement = placeholder.parentElement;
+
+      if (!avatarElement) continue;
+
+      const avatarStyle = window.getComputedStyle(avatarElement);
+
+      // Рисуем фон таким же цветом, как в Mini App.
+      ctx.beginPath();
+      ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
+
+      ctx.fillStyle = avatarStyle.backgroundColor;
+      ctx.fill();
+
+      ctx.font = `${avatarStyle.fontWeight} ${
+        parseFloat(avatarStyle.fontSize) * scaleY
+      }px ${avatarStyle.fontFamily}`;
+
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillStyle = avatarStyle.color;
+
+      ctx.fillText(
+        placeholder.textContent?.trim() || "♪",
+        centerX,
+        centerY
+      );
+
+      ctx.restore();
+    }
     // ========================================
     // РИСУЕМ ИМЕНА АРТИСТОВ ПОВЕРХ АУРЫ
     // ========================================
@@ -383,20 +434,45 @@ function StoryCard({
       topArtists.items.length > 0;
 
     const handleDownload = async () => {
+      if (!cardRef.current || isSharing) {
+        return;
+      }
 
-        if (!cardRef.current) {
-            return;
-        }
-        try { 
-            const imageUrl = await createStoryPng(cardRef.current);
+      setIsSharing(true);
 
-            const link = document.createElement("a");
-            link.download = "soundgram-story.png";
-            link.href = imageUrl;
-            link.click();
-        } catch (error) {
-            console.error("Ошибка создания PNG:", error);
+      try {
+        // Подготавливаем Telegram-аватар для Canvas.
+        let avatarCdnUrl: string | null = null;
+
+        if (avatarUrl && !avatarError) {
+          avatarCdnUrl = await uploadAvatarToCloudinary(avatarUrl);
         }
+
+        // Создаём PNG с аватаром, музыкальной аурой
+        // и фотографиями артистов.
+        const imageUrl = await createStoryPng(
+          cardRef.current,
+          avatarCdnUrl
+        );
+
+        // Скачиваем готовую картинку.
+        const link = document.createElement("a");
+        link.download = "soundgram-story.png";
+        link.href = imageUrl;
+
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+
+      } catch (error) {
+        console.error("Ошибка создания PNG:", error);
+
+        window.alert(
+          "Не удалось скачать изображение. Попробуйте ещё раз."
+        );
+      } finally {
+        setIsSharing(false);
+      }
     };
 
     const handleShareStory = async () => {

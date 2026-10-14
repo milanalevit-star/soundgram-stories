@@ -20,7 +20,7 @@ function ArtistAvatar({ name, imageUrl }: ArtistAvatarProps) {
             onError={() => setImageError(true)}
         />
       ) : (
-        <span>{name.charAt(0)}</span>
+        <span>{name.trim().charAt(0).toUpperCase() || "♪"}</span>
       )}
     </div>
   );
