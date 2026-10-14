@@ -433,48 +433,6 @@ function StoryCard({
       genreAura.items.some((genre) => genre.share > 0) ||
       topArtists.items.length > 0;
 
-    const handleDownload = async () => {
-      if (!cardRef.current || isSharing) {
-        return;
-      }
-
-      setIsSharing(true);
-
-      try {
-        // Подготавливаем Telegram-аватар для Canvas.
-        let avatarCdnUrl: string | null = null;
-
-        if (avatarUrl && !avatarError) {
-          avatarCdnUrl = await uploadAvatarToCloudinary(avatarUrl);
-        }
-
-        // Создаём PNG с аватаром, музыкальной аурой
-        // и фотографиями артистов.
-        const imageUrl = await createStoryPng(
-          cardRef.current,
-          avatarCdnUrl
-        );
-
-        // Скачиваем готовую картинку.
-        const link = document.createElement("a");
-        link.download = "soundgram-story.png";
-        link.href = imageUrl;
-
-        document.body.appendChild(link);
-        link.click();
-        link.remove();
-
-      } catch (error) {
-        console.error("Ошибка создания PNG:", error);
-
-        window.alert(
-          "Не удалось скачать изображение. Попробуйте ещё раз."
-        );
-      } finally {
-        setIsSharing(false);
-      }
-    };
-
     const handleShareStory = async () => {
       if (!cardRef.current || isSharing) return;
 
@@ -691,10 +649,6 @@ function StoryCard({
             : "Поделиться в истории ✨"}
       </button>
     )}
-
-    <button type="button" onClick={handleDownload}>
-        Скачать PNG
-    </button>
     </>
   );
 }
