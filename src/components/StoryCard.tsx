@@ -8,6 +8,7 @@ import {
 } from "../cloudinary";
 import {useRef, useState} from "react";
 import MusicAuraCanvas from "./MusicAuraCanvas";
+import { getGenreColor } from "../genreColors"
 
 type StoryCardProps = {
   name: string;
@@ -412,6 +413,40 @@ async function createStoryPng(
         ctx.restore();
     }
 
+  // ========================================
+  // ДОБАВЛЯЕМ ОРИГИНАЛЬНЫЙ ЛОГОТИП В PNG
+  // ========================================
+
+  const logoElement = card.querySelector<HTMLImageElement>(
+    ".soundgram-wordmark"
+  );
+
+  if (logoElement) {
+    // Дожидаемся загрузки SVG.
+    const logoImage = new Image();
+    logoImage.src = logoElement.src;
+
+    await logoImage.decode();
+
+    // Определяем положение логотипа относительно карточки.
+    const logoRect = logoElement.getBoundingClientRect();
+
+    const logoX = (logoRect.left - cardRect.left) * scaleX;
+    const logoY = (logoRect.top - cardRect.top) * scaleY;
+
+    const logoWidth = logoRect.width * scaleX;
+    const logoHeight = logoRect.height * scaleY;
+
+    // Рисуем оригинальный SVG поверх остальных элементов.
+    ctx.drawImage(
+      logoImage,
+      logoX,
+      logoY,
+      logoWidth,
+      logoHeight
+    );
+  }
+
   // 6. Возвращаем готовый PNG с фотографиями.
   return canvas.toDataURL("image/png");
 }
@@ -432,6 +467,25 @@ function StoryCard({
     const hasMusicData =
       genreAura.items.some((genre) => genre.share > 0) ||
       topArtists.items.length > 0;
+    
+    // Выбираем три ведущих жанра для карточки Stories.
+    const topGenres = genreAura.items
+      .filter(
+        (genre) =>
+          Number.isFinite(genre.share) && genre.share > 0
+      )
+      .sort((a, b) => b.share - a.share)
+      .slice(0, 3);
+
+    // Считаем сумму долей для корректного отображения процентов.
+    const totalGenreShare = genreAura.items.reduce(
+      (sum, genre) =>
+        sum +
+        (Number.isFinite(genre.share) && genre.share > 0
+          ? genre.share
+          : 0),
+      0
+    );
 
     const handleShareStory = async () => {
       if (!cardRef.current || isSharing) return;
@@ -608,6 +662,30 @@ function StoryCard({
                 ))}
               </div>
             </div>
+            {/* Три ведущих музыкальных жанра */}
+            {topGenres.length > 0 && (
+              <div className="story-genres">
+                {topGenres.map((genre) => (
+                  <div className="story-genre" key={genre.genre_id}>
+                    <span
+                      className="story-genre-color"
+                      style={{
+                        backgroundColor: getGenreColor(genre.genre_id),
+                      }}
+                    />
+
+                    <span className="story-genre-name">
+                      {genre.name}
+                    </span>
+                    <span className="story-genre-percent">
+                      {Math.round(
+                        (genre.share / totalGenreShare) * 100
+                      )}%
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
           </>
         ) : (
           <div className="story-empty">
@@ -623,15 +701,13 @@ function StoryCard({
         )}
       </main>
 
-      {/* Нижняя часть — логотип */}
-    <footer className="story-footer">
-        <div className="soundgram-brand">
-            S<span className="logo-letter-o">
-                O
-                <span className="logo-note" aria-hidden="true">♫</span>
-            </span>UNDGRAM
-        </div>
-    </footer>
+     <footer className="story-footer">
+      <img
+        className="soundgram-wordmark"
+        src="/icons/soundgram-wordmark.svg"
+        alt="SOUNDGRAM"
+      />
+      </footer>
 
     </div>
 
@@ -642,11 +718,19 @@ function StoryCard({
         onClick={handleShareStory}
         disabled={!hasMusicData || isSharing}
       >
-        {!hasMusicData
-          ? "Музыкальная аура пока недоступна"
-          : isSharing
-            ? "Подготавливаем историю…"
-            : "Поделиться в истории ✨"}
+        <img
+          className="story-share-icon"
+          src="/icons/share-profile.png"
+          alt=""
+          aria-hidden="true"
+        />
+        <span className="story-share-button-text">
+          {!hasMusicData
+            ? "Музыкальная аура пока недоступна"
+            : isSharing
+              ? "Подготавливаем историю…"
+              : "Поделиться в истории"}
+        </span>
       </button>
     )}
     </>

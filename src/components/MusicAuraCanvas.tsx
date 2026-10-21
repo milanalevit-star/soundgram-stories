@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import type { GenreAuraResponse } from "../mockData";
-import { genreColors } from "../genreColors";
+import { getGenreColor } from "../genreColors";
 import { noise2D } from "../auraNoise";
 
 const WIDTH = 360;
@@ -80,10 +80,7 @@ export default function MusicAuraCanvas({ genreAura }: Props) {
       const share = genre.share / totalShare;
       const seed = hashGenre(genre.genre_id);
 
-      const hex =
-        genreColors[
-          genre.genre_id as keyof typeof genreColors
-        ] ?? "#A7AEC8";
+      const hex = getGenreColor(genre.genre_id);
 
       // Размещаем потоки в разных частях ауры.
       const position = (index + 0.5) / genres.length;

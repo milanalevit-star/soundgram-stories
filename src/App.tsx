@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import "./App.css";
 
 import { genreAura, topArtists } from "./mockData";
@@ -23,13 +23,41 @@ function getProfileIdFromTelegram(): string | null {
 function App() {
   const user = window.Telegram?.WebApp?.initDataUnsafe?.user;
 
+  useEffect(() => {
+    const tg = window.Telegram?.WebApp;
+
+    if (!tg) return;
+
+    // Сообщаем Telegram, что приложение готово.
+    tg.ready();
+
+    // Разворачиваем Mini App на доступную высоту.
+    tg.expand();
+
+    // Полноэкранный режим поддерживается
+    // не всеми версиями Telegram.
+    if (tg.isVersionAtLeast("8.0")) {
+      const fullscreenWebApp = tg as typeof tg & {
+        requestFullscreen?: () => void;
+      };
+
+      try {
+        fullscreenWebApp.requestFullscreen?.();
+      } catch (error) {
+        console.warn(
+          "Не удалось включить полноэкранный режим:",
+          error
+        );
+      }
+    }
+  }, []);
+
   const [profileId, setProfileId] = useState<string | null>(
     getProfileIdFromTelegram
   );
 
   return (
     <div className="app">
-      <h1>SOUNDGRAM</h1>
 
       {profileId ? (
         <div className="profile-page">
