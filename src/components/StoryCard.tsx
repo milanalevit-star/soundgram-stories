@@ -9,7 +9,6 @@ import {
 import {useRef, useState} from "react";
 import MusicAuraCanvas from "./MusicAuraCanvas";
 import { getGenreColor } from "../genreColors"
-
 type StoryCardProps = {
   name: string;
   username: string;
@@ -42,6 +41,7 @@ async function createStoryPng(
           if (
             node instanceof HTMLElement &&
             (
+              node.classList.contains("artist-avatar") ||
               node.classList.contains("artist-name") ||
               node.classList.contains("story-genres")
             )
@@ -215,46 +215,54 @@ async function createStoryPng(
         ctx.restore();
     }
 
-  // Находим фотографии артистов.
-    const images = Array.from(
-        card.querySelectorAll<HTMLImageElement>(
-            ".artist-avatar img"
-        )
+  // ========================================
+  // ФОТОГРАФИИ И ЗАГЛУШКИ АРТИСТОВ
+  // ========================================
+
+  // Собираем всех артистов, а не отдельно фотографии и заглушки.
+  const artistItems = Array.from(
+    card.querySelectorAll<HTMLElement>(".artist-item")
+  );
+
+  // Сортируем по z-index.
+  // Элементы с большим z-index рисуем последними.
+  artistItems.sort((a, b) => {
+    const zA = Number.parseInt(
+      window.getComputedStyle(a).zIndex,
+      10
+    ) || 0;
+
+    const zB = Number.parseInt(
+      window.getComputedStyle(b).zIndex,
+      10
+    ) || 0;
+
+    return zA - zB;
+  });
+
+  for (const artistItem of artistItems) {
+    const avatar = artistItem.querySelector<HTMLElement>(
+      ".artist-avatar"
     );
 
-        // Сортируем фотографии по CSS z-index,
-        // чтобы порядок наложения совпадал с Mini App.
-    images.sort((a, b) => {
-        const getZIndex = (img: HTMLImageElement) => {
-            const artistItem = img.closest(".artist-item");
+    if (!avatar) continue;
 
-            if (!artistItem) return 0;
+    const img = avatar.querySelector<HTMLImageElement>("img");
+    const placeholder = avatar.querySelector<HTMLElement>("span");
 
-            const zIndex = window.getComputedStyle(artistItem).zIndex;
-
-            return Number.parseInt(zIndex, 10) || 0;
-        };
-
-        return getZIndex(a) - getZIndex(b);
-    });
-
-  for (const img of images) {
-    if (!img.complete) {
+    // Ждём фотографию, если она ещё загружается.
+    if (img && !img.complete) {
       try {
         await img.decode();
       } catch {
-        console.warn(`Не удалось загрузить фотографию: ${img.alt}`);
+        console.warn(
+          `Не удалось загрузить фотографию: ${img.alt}`
+        );
       }
     }
 
-    if (img.naturalWidth === 0) {
-      console.warn(`Фотография недоступна: ${img.alt}`);
-      continue;
-    }
+    const rect = avatar.getBoundingClientRect();
 
-    const rect = img.getBoundingClientRect();
-
-    // Координаты фотографии относительно карточки.
     const x = (rect.left - cardRect.left) * scaleX;
     const y = (rect.top - cardRect.top) * scaleY;
 
@@ -265,272 +273,261 @@ async function createStoryPng(
     const centerY = y + height / 2;
     const radius = Math.min(width, height) / 2;
 
-    // 5. Обрезаем фотографию по кругу.
-    ctx.save();
+    const hasLoadedImage =
+      img !== null &&
+      img.naturalWidth > 0 &&
+      img.naturalHeight > 0;
 
-    ctx.beginPath();
-    ctx.arc(
-      centerX,
-      centerY,
-      radius,
-      0,
-      Math.PI * 2
-    );
+    if (hasLoadedImage && img) {
+      // Рисуем фотографию внутри круглой маски.
+      const sourceWidth = img.naturalWidth;
+      const sourceHeight = img.naturalHeight;
 
-    ctx.clip();
+      const sourceSize = Math.min(
+        sourceWidth,
+        sourceHeight
+      );
 
-    // Аналог CSS object-fit: cover.
-    const sourceWidth = img.naturalWidth;
-    const sourceHeight = img.naturalHeight;
-
-    const sourceSize = Math.min(
-      sourceWidth,
-      sourceHeight
-    );
-
-    const sourceX = (sourceWidth - sourceSize) / 2;
-    const sourceY = (sourceHeight - sourceSize) / 2;
-
-    ctx.drawImage(
-      img,
-      sourceX,
-      sourceY,
-      sourceSize,
-      sourceSize,
-      x,
-      y,
-      width,
-      height
-    );
-
-    ctx.restore();
-  }
-
-    const avatarPlaceholders = Array.from(
-      card.querySelectorAll<HTMLElement>(".artist-avatar span")
-    );
-
-    for (const placeholder of avatarPlaceholders) {
-      const rect = placeholder.parentElement?.getBoundingClientRect();
-
-      if (!rect) continue;
-
-      const x = (rect.left - cardRect.left) * scaleX;
-      const y = (rect.top - cardRect.top) * scaleY;
-
-      const width = rect.width * scaleX;
-      const height = rect.height * scaleY;
-
-      const centerX = x + width / 2;
-      const centerY = y + height / 2;
-      const radius = Math.min(width, height) / 2;
+      const sourceX = (sourceWidth - sourceSize) / 2;
+      const sourceY = (sourceHeight - sourceSize) / 2;
 
       ctx.save();
 
-      const avatarElement = placeholder.parentElement;
+      ctx.beginPath();
+      ctx.arc(
+        centerX,
+        centerY,
+        radius,
+        0,
+        Math.PI * 2
+      );
+      ctx.clip();
 
-      if (!avatarElement) continue;
+      ctx.drawImage(
+        img,
+        sourceX,
+        sourceY,
+        sourceSize,
+        sourceSize,
+        x,
+        y,
+        width,
+        height
+      );
 
-      const avatarStyle = window.getComputedStyle(avatarElement);
+      ctx.restore();
+    } else {
+      // Рисуем заглушку, если фотография недоступна.
+      const avatarStyle = window.getComputedStyle(avatar);
+      const currentPlaceholder =
+        avatar.querySelector<HTMLElement>("span") ?? placeholder;
 
-      // Рисуем фон таким же цветом, как в Mini App.
+      const textStyle = currentPlaceholder
+        ? window.getComputedStyle(currentPlaceholder)
+        : avatarStyle;
+
+      ctx.save();
+
       ctx.beginPath();
       ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
+      ctx.clip();
 
       ctx.fillStyle = avatarStyle.backgroundColor;
-      ctx.fill();
+      ctx.fillRect(x, y, width, height);
 
-      ctx.font = `${avatarStyle.fontWeight} ${
-        parseFloat(avatarStyle.fontSize) * scaleY
-      }px ${avatarStyle.fontFamily}`;
+      ctx.font = `${textStyle.fontWeight} ${
+        parseFloat(textStyle.fontSize) * scaleY
+      }px ${textStyle.fontFamily}`;
 
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
-      ctx.fillStyle = avatarStyle.color;
+      ctx.fillStyle = textStyle.color;
 
       ctx.fillText(
-        placeholder.textContent?.trim() || "♪",
+        currentPlaceholder?.textContent?.trim() || "♪",
         centerX,
         centerY
       );
 
       ctx.restore();
     }
-    // ========================================
-    // РИСУЕМ ИМЕНА АРТИСТОВ ПОВЕРХ АУРЫ
-    // ========================================
-
-    const artistNames = Array.from(
-        card.querySelectorAll<HTMLElement>(".artist-name")
-    );
-
-    for (const nameElement of artistNames) {
-        const rect = nameElement.getBoundingClientRect();
-        const styles = window.getComputedStyle(nameElement);
-
-        // Координаты подписи относительно карточки
-        const x =
-            (rect.left + rect.width / 2 - cardRect.left) * scaleX;
-
-        const y =
-            (rect.top + rect.height / 2 - cardRect.top) * scaleY;
-
-        // Получаем размер шрифта из CSS
-        const fontSize =
-            parseFloat(styles.fontSize) * scaleY;
-
-        ctx.save();
-
-        ctx.font = `300 ${fontSize}px Arial, sans-serif`;
-        ctx.textAlign = "center";
-        ctx.textBaseline = "middle";
-
-        const artistName = nameElement.textContent ?? "";
-
-        const maxWidth = rect.width * scaleX;
-
-        function truncateText(
-          text: string,
-          maxWidth: number
-        ): string {
-          if (ctx!.measureText(text).width <= maxWidth) {
-            return text;
-          }
-
-          let result = text;
-
-          while (
-            result.length > 0 &&
-            ctx!.measureText(`${result}…`).width > maxWidth
-          ) {
-            result = result.slice(0, -1);
-          }
-
-          return `${result}…`;
-        }
-
-        const visibleName = truncateText(artistName, maxWidth);
-
-        ctx.fillStyle = "#FFFFFF";
-
-        ctx.fillText(visibleName, x, y);
-        ctx.shadowColor = "transparent";
-        ctx.shadowBlur = 0;
-        ctx.shadowOffsetX = 0;
-        ctx.shadowOffsetY = 0;
-
-        ctx.restore();
-    }
-
-  // ========================================
-  // ДОБАВЛЯЕМ ОРИГИНАЛЬНЫЙ ЛОГОТИП В PNG
-  // ========================================
-
-  const logoElement = card.querySelector<HTMLImageElement>(
-    ".soundgram-wordmark"
-  );
-
-  if (logoElement) {
-    // Дожидаемся загрузки SVG.
-    const logoImage = new Image();
-    logoImage.src = logoElement.src;
-
-    await logoImage.decode();
-
-    // Определяем положение логотипа относительно карточки.
-    const logoRect = logoElement.getBoundingClientRect();
-
-    const logoX = (logoRect.left - cardRect.left) * scaleX;
-    const logoY = (logoRect.top - cardRect.top) * scaleY;
-
-    const logoWidth = logoRect.width * scaleX;
-    const logoHeight = logoRect.height * scaleY;
-
-    // Рисуем оригинальный SVG поверх остальных элементов.
-    ctx.drawImage(
-      logoImage,
-      logoX,
-      logoY,
-      logoWidth,
-      logoHeight
-    );
   }
 
-  // ========================================
-  // РИСУЕМ ЖАНРЫ ПОВЕРХ МУЗЫКАЛЬНОЙ АУРЫ
-  // ========================================
+      // ========================================
+      // РИСУЕМ ИМЕНА АРТИСТОВ ПОВЕРХ АУРЫ
+      // ========================================
 
-  const genreElements = Array.from(
-    card.querySelectorAll<HTMLElement>(".story-genre")
-  );
+      const artistNames = Array.from(
+          card.querySelectorAll<HTMLElement>(".artist-name")
+      );
 
-  for (const genreElement of genreElements) {
-    const dot = genreElement.querySelector<HTMLElement>(
-      ".story-genre-color"
+      for (const nameElement of artistNames) {
+          const rect = nameElement.getBoundingClientRect();
+          const styles = window.getComputedStyle(nameElement);
+
+          // Координаты подписи относительно карточки
+          const x =
+              (rect.left + rect.width / 2 - cardRect.left) * scaleX;
+
+          const y =
+              (rect.top + rect.height / 2 - cardRect.top) * scaleY;
+
+          // Получаем размер шрифта из CSS
+          const fontSize =
+              parseFloat(styles.fontSize) * scaleY;
+
+          ctx.save();
+
+          ctx.font = `300 ${fontSize}px Arial, sans-serif`;
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+
+          const artistName = nameElement.textContent ?? "";
+
+          const maxWidth = rect.width * scaleX;
+
+          function truncateText(
+            text: string,
+            maxWidth: number
+          ): string {
+            if (ctx!.measureText(text).width <= maxWidth) {
+              return text;
+            }
+
+            let result = text;
+
+            while (
+              result.length > 0 &&
+              ctx!.measureText(`${result}…`).width > maxWidth
+            ) {
+              result = result.slice(0, -1);
+            }
+
+            return `${result}…`;
+          }
+
+          const visibleName = truncateText(artistName, maxWidth);
+
+          ctx.fillStyle = "#FFFFFF";
+
+          ctx.fillText(visibleName, x, y);
+          ctx.shadowColor = "transparent";
+          ctx.shadowBlur = 0;
+          ctx.shadowOffsetX = 0;
+          ctx.shadowOffsetY = 0;
+
+          ctx.restore();
+      }
+
+    // ========================================
+    // ДОБАВЛЯЕМ ОРИГИНАЛЬНЫЙ ЛОГОТИП В PNG
+    // ========================================
+
+    const logoElement = card.querySelector<HTMLImageElement>(
+      ".soundgram-wordmark"
     );
 
-    const name = genreElement.querySelector<HTMLElement>(
-      ".story-genre-name"
+    if (logoElement) {
+      // Дожидаемся загрузки SVG.
+      const logoImage = new Image();
+      logoImage.src = logoElement.src;
+
+      await logoImage.decode();
+
+      // Определяем положение логотипа относительно карточки.
+      const logoRect = logoElement.getBoundingClientRect();
+
+      const logoX = (logoRect.left - cardRect.left) * scaleX;
+      const logoY = (logoRect.top - cardRect.top) * scaleY;
+
+      const logoWidth = logoRect.width * scaleX;
+      const logoHeight = logoRect.height * scaleY;
+
+      // Рисуем оригинальный SVG поверх остальных элементов.
+      ctx.drawImage(
+        logoImage,
+        logoX,
+        logoY,
+        logoWidth,
+        logoHeight
+      );
+    }
+
+    // ========================================
+    // РИСУЕМ ЖАНРЫ ПОВЕРХ МУЗЫКАЛЬНОЙ АУРЫ
+    // ========================================
+
+    const genreElements = Array.from(
+      card.querySelectorAll<HTMLElement>(".story-genre")
     );
 
-    const percent = genreElement.querySelector<HTMLElement>(
-      ".story-genre-percent"
-    );
+    for (const genreElement of genreElements) {
+      const dot = genreElement.querySelector<HTMLElement>(
+        ".story-genre-color"
+      );
 
-    if (!dot || !name || !percent) continue;
+      const name = genreElement.querySelector<HTMLElement>(
+        ".story-genre-name"
+      );
 
-    // Цветной маркер.
-    const dotRect = dot.getBoundingClientRect();
-    const dotStyles = window.getComputedStyle(dot);
+      const percent = genreElement.querySelector<HTMLElement>(
+        ".story-genre-percent"
+      );
 
-    const dotX =
-      (dotRect.left - cardRect.left) * scaleX;
+      if (!dot || !name || !percent) continue;
 
-    const dotY =
-      (dotRect.top - cardRect.top) * scaleY;
+      // Цветной маркер.
+      const dotRect = dot.getBoundingClientRect();
+      const dotStyles = window.getComputedStyle(dot);
 
-    const dotRadius =
-      (Math.min(dotRect.width * scaleX, dotRect.height * scaleY)) / 2;
+      const dotX =
+        (dotRect.left - cardRect.left) * scaleX;
 
-    ctx.save();
+      const dotY =
+        (dotRect.top - cardRect.top) * scaleY;
 
-    ctx.beginPath();
-    ctx.arc(
-      dotX + (dotRect.width * scaleX) / 2,
-      dotY + (dotRect.height * scaleY) / 2,
-      dotRadius,
-      0,
-      Math.PI * 2
-    );
-
-    ctx.fillStyle = dotStyles.backgroundColor;
-    ctx.fill();
-
-    ctx.restore();
-
-    // Название жанра и процент.
-    for (const element of [name, percent]) {
-      const rect = element.getBoundingClientRect();
-      const styles = window.getComputedStyle(element);
-
-      const x = (rect.left - cardRect.left) * scaleX;
-      const y =
-        (rect.top + rect.height / 2 - cardRect.top) * scaleY;
-
-      const fontSize = parseFloat(styles.fontSize) * scaleY;
+      const dotRadius =
+        (Math.min(dotRect.width * scaleX, dotRect.height * scaleY)) / 2;
 
       ctx.save();
 
-      ctx.font = `${styles.fontWeight} ${fontSize}px ${styles.fontFamily}`;
-      ctx.fillStyle = styles.color;
-      ctx.textAlign = "left";
-      ctx.textBaseline = "middle";
+      ctx.beginPath();
+      ctx.arc(
+        dotX + (dotRect.width * scaleX) / 2,
+        dotY + (dotRect.height * scaleY) / 2,
+        dotRadius,
+        0,
+        Math.PI * 2
+      );
 
-      ctx.fillText(element.textContent?.trim() ?? "", x, y);
+      ctx.fillStyle = dotStyles.backgroundColor;
+      ctx.fill();
 
       ctx.restore();
+
+      // Название жанра и процент.
+      for (const element of [name, percent]) {
+        const rect = element.getBoundingClientRect();
+        const styles = window.getComputedStyle(element);
+
+        const x = (rect.left - cardRect.left) * scaleX;
+        const y =
+          (rect.top + rect.height / 2 - cardRect.top) * scaleY;
+
+        const fontSize = parseFloat(styles.fontSize) * scaleY;
+
+        ctx.save();
+
+        ctx.font = `${styles.fontWeight} ${fontSize}px ${styles.fontFamily}`;
+        ctx.fillStyle = styles.color;
+        ctx.textAlign = "left";
+        ctx.textBaseline = "middle";
+
+        ctx.fillText(element.textContent?.trim() ?? "", x, y);
+
+        ctx.restore();
+      }
     }
-  }
 
   // 6. Возвращаем готовый PNG с фотографиями.
   return canvas.toDataURL("image/png");
@@ -559,7 +556,6 @@ function StoryCard({
     const hasMusicData =
       genreAura.items.some((genre) => genre.share > 0) ||
       topArtists.items.length > 0;
-    
     // Выбираем три ведущих жанра для карточки Stories.
     const topGenres = genreAura.items
       .filter(
@@ -624,7 +620,7 @@ function StoryCard({
           tg.isVersionAtLeast("7.8") &&
           typeof tg.shareToStory === "function";
 
-        if (!canShareToStory) {
+        if (!canShareToStory || typeof tg?.shareToStory !== "function") {
           setShareMessage(
             "На этом устройстве публикация через Telegram недоступна. " +
             "Ты можешь открыть изображение и сохранить его вручную."
@@ -635,8 +631,22 @@ function StoryCard({
         // Пока не прикрепляем widget_link:
         // переход в настоящий профиль SOUNDGRAM ещё не настроен.
         try {
+          const isPremium =
+            tg.initDataUnsafe.user?.is_premium === true;
+
+          const profileUrl =
+            "https://t.me/soundgram_app_bot?startapp=Jgu316un";
+
           tg.shareToStory(publicUrl, {
             text: "Моя музыкальная аура в SOUNDGRAM 🎵",
+            ...(isPremium
+              ? {
+                  widget_link: {
+                    url: profileUrl,
+                    name: "Мой SOUNDGRAM",
+                  },
+                }
+              : {}),
           });
 
           setShareMessage(

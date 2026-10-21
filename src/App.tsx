@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import "./App.css";
 
 import { genreAura, topArtists } from "./mockData";
-
 import StoryCard from "./components/StoryCard";
 
 // Получаем ID профиля из Telegram-ссылки

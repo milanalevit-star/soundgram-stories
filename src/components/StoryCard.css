@@ -672,3 +672,16 @@
   text-align: center;
   text-decoration: none;
 }
+
+/* Специальное расположение для двух артистов */
+.story-artists:has(> .artist-item:nth-child(2):last-child)
+  > .artist-item:nth-child(1) {
+  left: 35%;
+  top: 52%;
+}
+
+.story-artists:has(> .artist-item:nth-child(2):last-child)
+  > .artist-item:nth-child(2) {
+  left: 65%;
+  top: 55%;
+}
