@@ -1,27 +1,11 @@
 .story-card {
   width: 360px; /*ширина карточки*/
-  max-width: 100%; /*не позволяет ей выходить за пределы более узкого экрана.*/
+  max-width: none; /*не позволяет ей выходить за пределы более узкого экрана.*/
   aspect-ratio: 9 / 16; /*заставляет браузер сохранять пропорции вертикальной истории*/
 
   position: relative;
 
-  background:
-    radial-gradient(
-        ellipse at 18% 38%,
-        rgba(133, 136, 250, 0.20) 0%,
-        transparent 48%
-    ),
-    radial-gradient(
-        ellipse at 80% 58%,
-        rgba(255, 79, 137, 0.16) 0%,
-        transparent 46%
-    ),
-    radial-gradient(
-        ellipse at 48% 82%,
-        rgba(46, 212, 189, 0.09) 0%,
-        transparent 42%
-    ),
-    #05045c;
+  background: var(--sg-bg-main);
   color: white;
 
   border-radius: 0; 
@@ -639,4 +623,52 @@
   width: 170px;
   height: auto;
   object-fit: contain;
+}
+
+/* Контейнер предпросмотра Stories */
+
+.story-preview {
+  --preview-scale: min(
+    1,
+    calc((100vw - 32px) / 360px)
+  );
+
+  position: relative;
+
+  width: calc(360px * var(--preview-scale));
+  height: calc(640px * var(--preview-scale));
+
+  margin: 0 auto;
+}
+
+/* Масштабируем карточку целиком */
+
+.story-preview > .story-card {
+  transform: scale(var(--preview-scale));
+  transform-origin: top left;
+}
+
+.story-share-message {
+  max-width: 420px;
+  margin: 8px auto;
+  color: var(--sg-text-muted);
+  font-size: 13px;
+  line-height: 1.5;
+  text-align: center;
+}
+
+.story-fallback-link {
+  display: block;
+  width: fit-content;
+  max-width: 100%;
+  margin: 12px auto 24px;
+  padding: 10px 16px;
+
+  border: 1px solid var(--sg-brand-light-cyan);
+  border-radius: 12px;
+
+  color: #ffffff;
+  font-size: 14px;
+  text-align: center;
+  text-decoration: none;
 }

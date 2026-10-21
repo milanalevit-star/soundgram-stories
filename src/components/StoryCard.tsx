@@ -17,7 +17,7 @@ type StoryCardProps = {
   topArtists: TopArtistsResponse;
   canShare?: boolean;
   avatarUrl?: string | null;
-  tracksCount: number;
+  tracksCount?: number | null;
 };
 
 async function createStoryPng(
@@ -28,25 +28,28 @@ async function createStoryPng(
 
     const backgroundUrl = await toPng(card, {
         pixelRatio,
-        backgroundColor: "#111233",
+        backgroundColor: "#00005a",
 
         filter: (node) => {
-            if (node instanceof HTMLImageElement) {
-                return false;
-            }
+          if (node instanceof HTMLImageElement) {
+            return false;
+          }
 
-            if (node instanceof HTMLCanvasElement) {
-                return false;
-            }
+          if (node instanceof HTMLCanvasElement) {
+            return false;
+          }
 
-            if (
-                node instanceof HTMLElement &&
-                node.classList.contains("artist-name")
-            ) {
-                return false;
-            }
+          if (
+            node instanceof HTMLElement &&
+            (
+              node.classList.contains("artist-name") ||
+              node.classList.contains("story-genres")
+            )
+          ) {
+            return false;
+          }
 
-            return true;
+          return true;
         },
     });
 
@@ -236,10 +239,16 @@ async function createStoryPng(
     });
 
   for (const img of images) {
-    if (!img.complete || img.naturalWidth === 0) {
-      console.warn(
-        `Пропускаем незагруженную фотографию: ${img.alt}`
-      );
+    if (!img.complete) {
+      try {
+        await img.decode();
+      } catch {
+        console.warn(`Не удалось загрузить фотографию: ${img.alt}`);
+      }
+    }
+
+    if (img.naturalWidth === 0) {
+      console.warn(`Фотография недоступна: ${img.alt}`);
       continue;
     }
 
@@ -447,6 +456,82 @@ async function createStoryPng(
     );
   }
 
+  // ========================================
+  // РИСУЕМ ЖАНРЫ ПОВЕРХ МУЗЫКАЛЬНОЙ АУРЫ
+  // ========================================
+
+  const genreElements = Array.from(
+    card.querySelectorAll<HTMLElement>(".story-genre")
+  );
+
+  for (const genreElement of genreElements) {
+    const dot = genreElement.querySelector<HTMLElement>(
+      ".story-genre-color"
+    );
+
+    const name = genreElement.querySelector<HTMLElement>(
+      ".story-genre-name"
+    );
+
+    const percent = genreElement.querySelector<HTMLElement>(
+      ".story-genre-percent"
+    );
+
+    if (!dot || !name || !percent) continue;
+
+    // Цветной маркер.
+    const dotRect = dot.getBoundingClientRect();
+    const dotStyles = window.getComputedStyle(dot);
+
+    const dotX =
+      (dotRect.left - cardRect.left) * scaleX;
+
+    const dotY =
+      (dotRect.top - cardRect.top) * scaleY;
+
+    const dotRadius =
+      (Math.min(dotRect.width * scaleX, dotRect.height * scaleY)) / 2;
+
+    ctx.save();
+
+    ctx.beginPath();
+    ctx.arc(
+      dotX + (dotRect.width * scaleX) / 2,
+      dotY + (dotRect.height * scaleY) / 2,
+      dotRadius,
+      0,
+      Math.PI * 2
+    );
+
+    ctx.fillStyle = dotStyles.backgroundColor;
+    ctx.fill();
+
+    ctx.restore();
+
+    // Название жанра и процент.
+    for (const element of [name, percent]) {
+      const rect = element.getBoundingClientRect();
+      const styles = window.getComputedStyle(element);
+
+      const x = (rect.left - cardRect.left) * scaleX;
+      const y =
+        (rect.top + rect.height / 2 - cardRect.top) * scaleY;
+
+      const fontSize = parseFloat(styles.fontSize) * scaleY;
+
+      ctx.save();
+
+      ctx.font = `${styles.fontWeight} ${fontSize}px ${styles.fontFamily}`;
+      ctx.fillStyle = styles.color;
+      ctx.textAlign = "left";
+      ctx.textBaseline = "middle";
+
+      ctx.fillText(element.textContent?.trim() ?? "", x, y);
+
+      ctx.restore();
+    }
+  }
+
   // 6. Возвращаем готовый PNG с фотографиями.
   return canvas.toDataURL("image/png");
 }
@@ -464,6 +549,13 @@ function StoryCard({
     const cardRef = useRef<HTMLDivElement>(null);
     const [avatarError, setAvatarError] = useState(false);
     const [isSharing, setIsSharing] = useState(false);
+    const [shareStage, setShareStage] = useState<
+      "photos" | "render" | "upload" | null
+    >(null);
+    const [fallbackImageUrl, setFallbackImageUrl] =
+      useState<string | null>(null);
+
+    const [shareMessage, setShareMessage] = useState<string | null>(null);
     const hasMusicData =
       genreAura.items.some((genre) => genre.share > 0) ||
       topArtists.items.length > 0;
@@ -490,108 +582,98 @@ function StoryCard({
     const handleShareStory = async () => {
       if (!cardRef.current || isSharing) return;
 
+      const tg = window.Telegram?.WebApp;
       const startTime = performance.now();
 
-        const tg = window.Telegram.WebApp;
+      setIsSharing(true);
+      setFallbackImageUrl(null);
+      setShareMessage(null);
+      setShareStage("photos");
 
-        const telegramUserId = tg.initDataUnsafe.user?.id;
+      try {
+        // 1. Подготавливаем аватар.
+        let avatarCdnUrl: string | null = null;
 
-        if (!telegramUserId) {
-            tg.showAlert(
-                "Не удалось определить пользователя Telegram"
-            );
-            return;
+        if (avatarUrl && !avatarError) {
+          try {
+            avatarCdnUrl = await uploadAvatarToCloudinary(avatarUrl);
+          } catch (error) {
+            console.warn("Не удалось загрузить аватар:", error);
+          }
         }
 
-        const profileUrl =
-            `https://t.me/SoundGram_stories_test_bot?startapp=profile_${telegramUserId}`;
+        setShareStage("render");
 
-        if (!tg.isVersionAtLeast("7.8")) {
-            tg.showAlert("Обновите Telegram для публикации Stories");
-            return;
+        // 2. Создаём изображение Stories.
+        const imageUrl = await createStoryPng(
+          cardRef.current,
+          avatarCdnUrl
+        );
+
+        setShareStage("upload");
+
+        // 3. Загружаем PNG, чтобы получить публичную ссылку.
+        const publicUrl = await uploadToCloudinary(imageUrl);
+
+        // Сохраняем ссылку для альтернативного способа.
+        setFallbackImageUrl(publicUrl);
+
+        // 4. Проверяем возможность открытия редактора Stories.
+        const canShareToStory =
+          tg != null &&
+          tg.isVersionAtLeast("7.8") &&
+          typeof tg.shareToStory === "function";
+
+        if (!canShareToStory) {
+          setShareMessage(
+            "На этом устройстве публикация через Telegram недоступна. " +
+            "Ты можешь открыть изображение и сохранить его вручную."
+          );
+          return;
         }
 
-        let step = "Подготовка аватара";
-
-        setIsSharing(true);
-
+        // Пока не прикрепляем widget_link:
+        // переход в настоящий профиль SOUNDGRAM ещё не настроен.
         try {
-          // Засекаем время начала загрузки аватара
-            const avatarStart = performance.now();
+          tg.shareToStory(publicUrl, {
+            text: "Моя музыкальная аура в SOUNDGRAM 🎵",
+          });
 
-            // Загружаем аватар в Cloudinary
-            const avatarCdnUrl = avatarUrl && !avatarError
-              ? await uploadAvatarToCloudinary(avatarUrl)
-              : null;
-
-          console.log(
-            "Аватар:",
-            ((performance.now() - avatarStart) / 1000).toFixed(2),
-            "сек."
+          setShareMessage(
+            "Если редактор Stories не открылся, " +
+            "воспользуйся ссылкой на изображение ниже."
           );
-
-          // 2. Создаём PNG с аватаром, аурой и артистами.
-          step = "Создание PNG";
-
-          const pngStart = performance.now();
-
-          const imageUrl = await createStoryPng(
-            cardRef.current,
-            avatarCdnUrl
-          );
-
-          console.log(
-            "Создание PNG:",
-            ((performance.now() - pngStart) / 1000).toFixed(2),
-            "сек."
-          );
-          // 3. Загружаем готовую историю в Cloudinary.
-          step = "Загрузка в Cloudinary";
-
-            const uploadStart = performance.now();
-            const publicUrl = await uploadToCloudinary(imageUrl);
-
-            console.log(
-              "Загрузка PNG:",
-              ((performance.now() - uploadStart) / 1000).toFixed(2),
-              "сек."
-            );
-
-    // Шаг 3 — открываем Telegram Stories
-            step = "Открытие Telegram Stories";
-
-            tg.shareToStory(publicUrl, {
-                text: "Моя музыкальная аура в SOUNDGRAM 🎵",
-                widget_link: {
-                    url: profileUrl,
-                    name: "Мой SOUNDGRAM",
-                },
-            });
-
         } catch (error) {
-            console.error(`Ошибка на этапе: ${step}`, error);
+          console.warn("Не удалось открыть редактор Stories:", error);
 
-            const message =
-                error instanceof Error ? error.message : String(error);
-
-            tg.showAlert(
-                `Этап: ${step}\nОшибка: ${message.slice(0, 150)}`
-            );
-        }
-        finally {
-          const elapsed = performance.now() - startTime;
-
-          console.log(
-              `Подготовка Stories: ${(elapsed / 1000).toFixed(2)} сек.`
+          setShareMessage(
+            "Не получилось открыть редактор Telegram Stories. " +
+            "Изображение готово — его можно открыть и сохранить."
           );
-
-          setIsSharing(false);
         }
+      } catch (error) {
+        console.error("Не удалось подготовить историю:", error);
+
+        setShareMessage(
+          "Не удалось подготовить изображение. " +
+          "Проверь подключение к интернету и попробуй ещё раз."
+        );
+      } finally {
+        console.log(
+          `Подготовка Stories: ${
+            ((performance.now() - startTime) / 1000).toFixed(2)
+          } сек.`
+        );
+
+        setIsSharing(false);
+        setShareStage(null);
+      }
     };
 
   return (
     <>
-    <div className="story-card" ref={cardRef}>
+    <div className="story-preview">
+      <div className="story-card" ref={cardRef}>
 
       <header className="story-header">
 
@@ -622,15 +704,19 @@ function StoryCard({
 
             <h2>{name}</h2>
 
-            <div className="story-profile-stat">
-              <span className="story-profile-count">
-                {tracksCount}
-              </span>
+            {tracksCount != null &&
+              Number.isFinite(tracksCount) &&
+              tracksCount >= 0 && (
+                <div className="story-profile-stat">
+                  <span className="story-profile-count">
+                    {tracksCount}
+                  </span>
 
-              <span className="story-profile-label">
-                Треки
-              </span>
-            </div>
+                  <span className="story-profile-label">
+                    Треки
+                  </span>
+                </div>
+              )}
 
           </div>
 
@@ -709,9 +795,10 @@ function StoryCard({
       />
       </footer>
 
-    </div>
+        </div>
+      </div>
 
-    {canShare && (
+      {canShare && (
       <button
         className="story-share-button"
         type="button"
@@ -724,15 +811,37 @@ function StoryCard({
           alt=""
           aria-hidden="true"
         />
-        <span className="story-share-button-text">
+        <span className="story-share-button-text" aria-live="polite">
           {!hasMusicData
             ? "Музыкальная аура пока недоступна"
             : isSharing
-              ? "Подготавливаем историю…"
+              ? shareStage === "photos"
+                ? "Подготавливаем фотографии…"
+                : shareStage === "render"
+                  ? "Создаём историю…"
+                  : shareStage === "upload"
+                    ? "Загружаем историю…"
+                    : "Подготавливаем историю…"
               : "Поделиться в истории"}
         </span>
       </button>
-    )}
+      )}
+      {canShare && shareMessage && (
+        <p className="story-share-message" role="status">
+          {shareMessage}
+        </p>
+      )}
+
+      {canShare && fallbackImageUrl && (
+        <a
+          className="story-fallback-link"
+          href={fallbackImageUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          Открыть изображение истории
+        </a>
+      )}
     </>
   );
 }

@@ -6,21 +6,30 @@ type ArtistAvatarProps = {
 };
 
 function ArtistAvatar({ name, imageUrl }: ArtistAvatarProps) {
-  const [imageError, setImageError] = useState(false);
+  const [loadedUrl, setLoadedUrl] = useState<string | null>(null);
+  const [failedUrl, setFailedUrl] = useState<string | null>(null);
 
-  const showImage = imageUrl !== null && !imageError;
+  const hasImage = Boolean(imageUrl);
+  const imageLoaded = hasImage && loadedUrl === imageUrl;
+  const imageFailed = hasImage && failedUrl === imageUrl;
+
+  const initial = name.trim().charAt(0).toUpperCase() || "♪";
 
   return (
     <div className="artist-avatar">
-      {showImage ? (
+      {!imageLoaded && <span>{initial}</span>}
+
+      {hasImage && !imageFailed && (
         <img
-            src={imageUrl}
-            alt={name}
-            crossOrigin="anonymous"
-            onError={() => setImageError(true)}
+          src={imageUrl!}
+          alt={name}
+          crossOrigin="anonymous"
+          onLoad={() => setLoadedUrl(imageUrl)}
+          onError={() => setFailedUrl(imageUrl)}
+          style={{
+            display: imageLoaded ? "block" : "none",
+          }}
         />
-      ) : (
-        <span>{name.trim().charAt(0).toUpperCase() || "♪"}</span>
       )}
     </div>
   );

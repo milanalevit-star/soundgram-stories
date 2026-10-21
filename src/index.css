@@ -1,4 +1,11 @@
 :root {
+  --sg-bg-main: #00005a;
+  --sg-bg-card: #1c1c78;
+  --sg-brand-blue: #323296;
+  --sg-brand-cyan: #087aa3;
+  --sg-brand-light-cyan: #40c3c8;
+  --sg-text-muted: #9f9fec;
+
   font-family: system-ui, -apple-system, BlinkMacSystemFont,
     "Segoe UI", sans-serif;
 
@@ -37,7 +44,7 @@ body {
   margin: 0;
   padding: 0;
 
-  background: #05005c;
+  background: #00005a;
   color: #ffffff;
 }
 

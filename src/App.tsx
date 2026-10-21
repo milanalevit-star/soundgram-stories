@@ -85,7 +85,6 @@ function App() {
         <>
           <StoryCard
             avatarUrl={user?.photo_url ?? null}
-            tracksCount={178}
             name={user?.first_name ?? "Гость"}
             username={user?.username ?? ""}
             genreAura={genreAura}
