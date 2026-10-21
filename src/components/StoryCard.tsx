@@ -654,11 +654,15 @@ function StoryCard({
             "воспользуйся ссылкой на изображение ниже."
           );
         } catch (error) {
-          console.warn("Не удалось открыть редактор Stories:", error);
+          console.error("Не удалось подготовить историю:", error);
+
+          const errorCode =
+            error instanceof Error
+              ? error.message
+              : "UNKNOWN_ERROR";
 
           setShareMessage(
-            "Не получилось открыть редактор Telegram Stories. " +
-            "Изображение готово — его можно открыть и сохранить."
+            `Не удалось подготовить изображение. Код: ${errorCode}`
           );
         }
       } catch (error) {
