@@ -668,9 +668,13 @@ function StoryCard({
       } catch (error) {
         console.error("Не удалось подготовить историю:", error);
 
+        const errorCode =
+          error instanceof Error
+            ? error.message
+            : "UNKNOWN_ERROR";
+
         setShareMessage(
-          "Не удалось подготовить изображение. " +
-          "Проверь подключение к интернету и попробуй ещё раз."
+          `Не удалось подготовить изображение. Код: ${errorCode}`
         );
       } finally {
         console.log(
