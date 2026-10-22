@@ -638,7 +638,10 @@ function StoryCard({
             "https://t.me/soundgram_app_bot?startapp=Jgu316un";
 
           tg.shareToStory(publicUrl, {
-            text: "Моя музыкальная аура в SOUNDGRAM 🎵",
+            text: isPremium
+              ? "Моя музыкальная аура в SOUNDGRAM 🎵"
+              : `Моя музыкальная аура в SOUNDGRAM 🎵\nМой профиль: ${profileUrl}`,
+
             ...(isPremium
               ? {
                   widget_link: {
@@ -694,17 +697,15 @@ function StoryCard({
       <div className="story-card" ref={cardRef}>
 
       <header className="story-header">
-
-        {/* Никнейм сверху по центру */}
+        {/* Никнейм пользователя */}
         {username && (
           <p className="story-header-username">
             @{username}
           </p>
         )}
 
-        {/* Основная информация профиля */}
+        {/* Аватар и имя */}
         <div className="story-profile">
-
           <div className="story-profile-avatar">
             {avatarUrl && !avatarError ? (
               <img
@@ -719,7 +720,6 @@ function StoryCard({
           </div>
 
           <div className="story-profile-info">
-
             <h2>{name}</h2>
 
             {tracksCount != null &&
@@ -729,16 +729,39 @@ function StoryCard({
                   <span className="story-profile-count">
                     {tracksCount}
                   </span>
-
                   <span className="story-profile-label">
                     Треки
                   </span>
                 </div>
               )}
-
           </div>
-
         </div>
+
+        {/* Жанры под профилем */}
+        {hasMusicData && topGenres.length > 0 && (
+          <div className="story-genres">
+            {topGenres.map((genre) => (
+              <div className="story-genre" key={genre.genre_id}>
+                <span
+                  className="story-genre-color"
+                  style={{
+                    backgroundColor: getGenreColor(genre.genre_id),
+                  }}
+                />
+
+                <span className="story-genre-name">
+                  {genre.name}
+                </span>
+
+                <span className="story-genre-percent">
+                  {Math.round(
+                    (genre.share / totalGenreShare) * 100
+                  )}%
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
       </header>
 
       <main className="story-content">
@@ -766,36 +789,14 @@ function StoryCard({
                 ))}
               </div>
             </div>
-            {/* Три ведущих музыкальных жанра */}
-            {topGenres.length > 0 && (
-              <div className="story-genres">
-                {topGenres.map((genre) => (
-                  <div className="story-genre" key={genre.genre_id}>
-                    <span
-                      className="story-genre-color"
-                      style={{
-                        backgroundColor: getGenreColor(genre.genre_id),
-                      }}
-                    />
-
-                    <span className="story-genre-name">
-                      {genre.name}
-                    </span>
-                    <span className="story-genre-percent">
-                      {Math.round(
-                        (genre.share / totalGenreShare) * 100
-                      )}%
-                    </span>
-                  </div>
-                ))}
-              </div>
-            )}
           </>
         ) : (
           <div className="story-empty">
             <div className="story-empty-icon">♫</div>
 
-            <h3>Твоя музыкальная аура пока не сформирована</h3>
+            <h3>
+              Твоя музыкальная аура пока не сформирована
+            </h3>
 
             <p>
               Добавь первые треки, чтобы увидеть
@@ -805,12 +806,12 @@ function StoryCard({
         )}
       </main>
 
-     <footer className="story-footer">
-      <img
-        className="soundgram-wordmark"
-        src="/icons/soundgram-wordmark.svg"
-        alt="SOUNDGRAM"
-      />
+      <footer className="story-footer">
+        <img
+          className="soundgram-wordmark"
+          src="/icons/soundgram-wordmark.svg"
+          alt="SOUNDGRAM"
+        />
       </footer>
 
         </div>
