@@ -6,7 +6,7 @@ import {
   uploadToCloudinary,
   uploadAvatarToCloudinary,
 } from "../cloudinary";
-import {useRef, useState} from "react";
+import { useEffect, useRef, useState } from "react";
 import MusicAuraCanvas from "./MusicAuraCanvas";
 import { getGenreColor } from "../genreColors"
 type StoryCardProps = {
@@ -544,6 +544,10 @@ function StoryCard({
 }: StoryCardProps) {
 
     const cardRef = useRef<HTMLDivElement>(null);
+    const avatarUploadCache = useRef<{
+      sourceUrl: string;
+      promise: Promise<string>;
+    } | null>(null);
     const [avatarError, setAvatarError] = useState(false);
     const [isSharing, setIsSharing] = useState(false);
     const [shareStage, setShareStage] = useState<
@@ -591,6 +595,35 @@ function StoryCard({
       telegram.isVersionAtLeast("7.8") &&
       typeof telegram.shareToStory === "function";
 
+    const prepareAvatar = (url: string): Promise<string> => {
+      if (avatarUploadCache.current?.sourceUrl === url) {
+        return avatarUploadCache.current.promise;
+      }
+
+      const promise = uploadAvatarToCloudinary(url).catch((error) => {
+        if (avatarUploadCache.current?.sourceUrl === url) {
+          avatarUploadCache.current = null;
+        }
+
+        throw error;
+      });
+
+      avatarUploadCache.current = {
+        sourceUrl: url,
+        promise,
+      };
+
+      return promise;
+    };
+
+    useEffect(() => {
+      if (!canShare || !avatarUrl || avatarError) return;
+
+      void prepareAvatar(avatarUrl).catch((error) => {
+        console.warn("Не удалось заранее подготовить аватар:", error);
+      });
+    }, [canShare, avatarUrl, avatarError]);
+
     const handleShareStory = async () => {
       if (!cardRef.current || isSharing) return;
 
@@ -600,6 +633,7 @@ function StoryCard({
       setIsSharing(true);
       setFallbackImageUrl(null);
       setShareMessage(null);
+      const avatarStart = performance.now();
       setShareStage("photos");
 
       try {
@@ -608,24 +642,49 @@ function StoryCard({
 
         if (avatarUrl && !avatarError) {
           try {
-            avatarCdnUrl = await uploadAvatarToCloudinary(avatarUrl);
+            avatarCdnUrl = await prepareAvatar(avatarUrl);
           } catch (error) {
             console.warn("Не удалось загрузить аватар:", error);
           }
         }
 
+        console.log(
+          `[Stories] Подготовка аватара: ${(
+            (performance.now() - avatarStart) /
+            1000
+          ).toFixed(2)} сек.`
+        );
+
         setShareStage("render");
 
         // 2. Создаём изображение Stories.
+        const renderStart = performance.now();
+
         const imageUrl = await createStoryPng(
           cardRef.current,
           avatarCdnUrl
         );
 
+        console.log(
+          `[Stories] Создание PNG: ${(
+            (performance.now() - renderStart) /
+            1000
+          ).toFixed(2)} сек.`
+        );
+
         setShareStage("upload");
 
-        // 3. Загружаем PNG, чтобы получить публичную ссылку.
+        // 3. Загружаем PNG в Cloudinary.
+        const uploadStart = performance.now();
+
         const publicUrl = await uploadToCloudinary(imageUrl);
+
+        console.log(
+          `[Stories] Загрузка PNG: ${(
+            (performance.now() - uploadStart) /
+            1000
+          ).toFixed(2)} сек.`
+        );
 
         // Сохраняем ссылку для альтернативного способа.
         setFallbackImageUrl(publicUrl);
@@ -634,15 +693,11 @@ function StoryCard({
 
         if (!canShareToStory || typeof tg?.shareToStory !== "function") {
           setShareMessage(
-            "Этот клиент Telegram не поддерживает публикацию Stories " +
-            "из Mini App. Открой готовое PNG ниже, сохрани его " +
-            "и опубликуй с телефона."
+            "Сохрани изображение, чтобы поделиться им в Telegram."
           );
           return;
         }
 
-        // Пока не прикрепляем widget_link:
-        // переход в настоящий профиль SOUNDGRAM ещё не настроен.
         try {
           const isPremium =
             tg.initDataUnsafe.user?.is_premium === true;
@@ -856,7 +911,7 @@ function StoryCard({
                     : "Подготавливаем историю…"
               : canOpenStoryEditor
                 ? "Поделиться в истории"
-                : "Подготовить PNG истории"}
+                : "Подготовить историю"}
         </span>
       </button>
       )}
@@ -874,13 +929,8 @@ function StoryCard({
             target="_blank"
             rel="noopener noreferrer"
           >
-            Открыть PNG истории
+            Открыть изображение
           </a>
-
-          <p className="story-fallback-hint">
-            Сохрани изображение и опубликуй его
-            через Telegram на телефоне.
-          </p>
         </div>
       )}
     </>
