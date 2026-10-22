@@ -176,7 +176,7 @@
   transform: translate(-50%, -50%);
 }
 
-/* Kanye West */
+/* Первый артист - центральный */
 .artist-item:nth-child(1) {
   left: 50%;
   top: 48%;
@@ -188,7 +188,7 @@
   height: 116px;
 }
 
-/* Billie Eilish */
+/* Второй артист - слева */
 .artist-item:nth-child(2) {
   left: 20%;
   top: 57%;
@@ -200,7 +200,7 @@
   height: 96px;
 }
 
-/* A$AP Rocky */
+/* Третий артист - справа */
 .artist-item:nth-child(3) {
   left: 80%;
   top: 57%;
@@ -277,16 +277,6 @@
   border-radius: 50%;
   object-fit: cover;
   flex-shrink: 0;
-}
-
-.story-card .artist-item .artist-name {
-  color: #ffffff;
-  font-size: 12px;
-  font-weight: 300;
-  letter-spacing: 0.4px;
-
-  -webkit-text-stroke: 0;
-  text-shadow: none;
 }
 
 .telegram-avatar {
@@ -443,15 +433,23 @@
   line-height: 1.5;
 }
 
-/* Ограничиваем ширину подписей артистов */
 .story-card .artist-item .artist-name {
   display: block;
   width: 110px;
   max-width: 110px;
+
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   text-align: center;
+
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 300;
+  letter-spacing: 0.4px;
+
+  -webkit-text-stroke: 0;
+  text-shadow: none;
 }
 
 /* Кнопка публикации в стиле SOUNDGRAM */

@@ -77,40 +77,98 @@ async function createStoryPng(
   const scaleX = canvas.width / cardRect.width;
   const scaleY = canvas.height / cardRect.height;
 
-  // Добавляем Telegram-аватар из Cloudinary.
-  if (avatarCdnUrl) {
-    const avatarElement =
-      card.querySelector<HTMLImageElement>(".telegram-avatar");
+  // Добавляем Telegram-аватар.
+  // Если фото не удалось загрузить, используем заглушку.
+  const avatarContainer = card.querySelector<HTMLElement>(
+    ".story-profile-avatar"
+  );
 
-    if (avatarElement) {
-      // Загружаем новую копию изображения с разрешённым CORS.
-      const avatarImage = new Image();
+  const avatarElement = avatarContainer?.querySelector<HTMLImageElement>(
+    ".telegram-avatar"
+  );
 
-      avatarImage.crossOrigin = "anonymous";
-      avatarImage.src = avatarCdnUrl;
+  if (avatarContainer && avatarElement) {
+    const rect = avatarContainer.getBoundingClientRect();
 
-      await avatarImage.decode();
+    const x = (rect.left - cardRect.left) * scaleX;
+    const y = (rect.top - cardRect.top) * scaleY;
 
-      const rect = avatarElement.getBoundingClientRect();
+    const width = rect.width * scaleX;
+    const height = rect.height * scaleY;
 
-      const x = (rect.left - cardRect.left) * scaleX;
-      const y = (rect.top - cardRect.top) * scaleY;
+    let avatarDrawn = false;
 
-      const width = rect.width * scaleX;
-      const height = rect.height * scaleY;
+    if (avatarCdnUrl) {
+      try {
+        const avatarImage = new Image();
 
-      // Рассчитываем обрезку по принципу object-fit: cover.
-      const sourceWidth = avatarImage.naturalWidth;
-      const sourceHeight = avatarImage.naturalHeight;
+        avatarImage.crossOrigin = "anonymous";
+        avatarImage.src = avatarCdnUrl;
 
-      const sourceSize = Math.min(sourceWidth, sourceHeight);
+        await avatarImage.decode();
 
-      const sourceX = (sourceWidth - sourceSize) / 2;
-      const sourceY = (sourceHeight - sourceSize) / 2;
+        const sourceWidth = avatarImage.naturalWidth;
+        const sourceHeight = avatarImage.naturalHeight;
+
+        const sourceSize = Math.min(sourceWidth, sourceHeight);
+
+        if (sourceSize <= 0) {
+          throw new Error("Некорректный размер аватара");
+        }
+
+        const sourceX = (sourceWidth - sourceSize) / 2;
+        const sourceY = (sourceHeight - sourceSize) / 2;
+
+        ctx.save();
+
+        try {
+          ctx.beginPath();
+          ctx.arc(
+            x + width / 2,
+            y + height / 2,
+            Math.min(width, height) / 2,
+            0,
+            Math.PI * 2
+          );
+          ctx.clip();
+
+          ctx.drawImage(
+            avatarImage,
+            sourceX,
+            sourceY,
+            sourceSize,
+            sourceSize,
+            x,
+            y,
+            width,
+            height
+          );
+
+          avatarDrawn = true;
+        } finally {
+          ctx.restore();
+        }
+      } catch (error) {
+        console.warn(
+          "Не удалось отобразить аватар. Используем заглушку.",
+          error
+        );
+      }
+    }
+
+    // Если фотографию не удалось нарисовать,
+    // показываем первую букву имени пользователя.
+    if (!avatarDrawn) {
+      const userName =
+        card.querySelector<HTMLElement>(
+          ".story-profile-info h2"
+        )?.textContent?.trim() || "Гость";
+
+      const initial = Array.from(userName)[0]?.toUpperCase() || "Г";
 
       ctx.save();
 
-      // Круглая маска.
+      ctx.fillStyle = "#8588fa";
       ctx.beginPath();
       ctx.arc(
         x + width / 2,
@@ -119,20 +177,17 @@ async function createStoryPng(
         0,
         Math.PI * 2
       );
+      ctx.fill();
 
-      ctx.clip();
+      ctx.fillStyle = "#ffffff";
+      ctx.font = `500 ${Math.round(height * 0.45)}px Arial`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
 
-      // Рисуем фотографию.
-      ctx.drawImage(
-        avatarImage,
-        sourceX,
-        sourceY,
-        sourceSize,
-        sourceSize,
-        x,
-        y,
-        width,
-        height
+      ctx.fillText(
+        initial,
+        x + width / 2,
+        y + height / 2
       );
 
       ctx.restore();
@@ -246,20 +301,11 @@ async function createStoryPng(
     );
 
     if (!avatar) continue;
-
     const img = avatar.querySelector<HTMLImageElement>("img");
     const placeholder = avatar.querySelector<HTMLElement>("span");
 
-    // Ждём фотографию, если она ещё загружается.
-    if (img && !img.complete) {
-      try {
-        await img.decode();
-      } catch {
-        console.warn(
-          `Не удалось загрузить фотографию: ${img.alt}`
-        );
-      }
-    }
+    // Не задерживаем создание истории из-за фотографии.
+    // Если она ещё не отображается, используем заглушку.
 
     const rect = avatar.getBoundingClientRect();
 
@@ -275,8 +321,10 @@ async function createStoryPng(
 
     const hasLoadedImage =
       img !== null &&
+      img.complete &&
       img.naturalWidth > 0 &&
-      img.naturalHeight > 0;
+      img.naturalHeight > 0 &&
+      window.getComputedStyle(img).display !== "none";
 
     if (hasLoadedImage && img) {
       // Рисуем фотографию внутри круглой маски.
@@ -727,25 +775,17 @@ function StoryCard({
         } catch (error) {
           console.error("Не удалось подготовить историю:", error);
 
-          const errorCode =
-            error instanceof Error
-              ? error.message
-              : "UNKNOWN_ERROR";
-
           setShareMessage(
-            `Не удалось подготовить изображение. Код: ${errorCode}`
+            "Не получилось подготовить историю. " +
+            "Проверь интернет-соединение и попробуй ещё раз."
           );
         }
       } catch (error) {
         console.error("Не удалось подготовить историю:", error);
 
-        const errorCode =
-          error instanceof Error
-            ? error.message
-            : "UNKNOWN_ERROR";
-
         setShareMessage(
-          `Не удалось подготовить изображение. Код: ${errorCode}`
+          "Не получилось подготовить историю. " +
+          "Проверь интернет-соединение и попробуй ещё раз."
         );
       } finally {
         console.log(
