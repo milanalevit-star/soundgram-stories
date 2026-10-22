@@ -640,7 +640,7 @@ function StoryCard({
           tg.shareToStory(publicUrl, {
             text: isPremium
               ? "Моя музыкальная аура в SOUNDGRAM 🎵"
-              : `Моя музыкальная аура в SOUNDGRAM 🎵\nМой профиль: ${profileUrl}`,
+              : "Моя музыкальная аура в SOUNDGRAM 🎵\nСлушай со мной: @soundgram_app_bot",
 
             ...(isPremium
               ? {
