@@ -628,3 +628,18 @@
   left: 65%;
   top: 55%;
 }
+
+.story-fallback {
+  width: 100%;
+  text-align: center;
+}
+
+.story-fallback-hint {
+  max-width: 320px;
+  margin: 8px auto 20px;
+
+  color: #aaa8df;
+  font-size: 13px;
+  line-height: 1.5;
+  text-align: center;
+}

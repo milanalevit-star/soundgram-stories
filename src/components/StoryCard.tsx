@@ -575,6 +575,22 @@ function StoryCard({
       0
     );
 
+    // Проверяем, поддерживает ли клиент открытие редактора Stories.
+    const telegram = typeof window !== "undefined"
+      ? window.Telegram?.WebApp
+      : undefined;
+
+    const isMobileTelegram =
+      telegram?.platform === "ios" ||
+      telegram?.platform === "android" ||
+      telegram?.platform === "android_x";
+
+    const canOpenStoryEditor =
+      isMobileTelegram &&
+      telegram != null &&
+      telegram.isVersionAtLeast("7.8") &&
+      typeof telegram.shareToStory === "function";
+
     const handleShareStory = async () => {
       if (!cardRef.current || isSharing) return;
 
@@ -614,16 +630,13 @@ function StoryCard({
         // Сохраняем ссылку для альтернативного способа.
         setFallbackImageUrl(publicUrl);
 
-        // 4. Проверяем возможность открытия редактора Stories.
-        const canShareToStory =
-          tg != null &&
-          tg.isVersionAtLeast("7.8") &&
-          typeof tg.shareToStory === "function";
+        const canShareToStory = canOpenStoryEditor;
 
         if (!canShareToStory || typeof tg?.shareToStory !== "function") {
           setShareMessage(
-            "На этом устройстве публикация через Telegram недоступна. " +
-            "Ты можешь открыть изображение и сохранить его вручную."
+            "Этот клиент Telegram не поддерживает публикацию Stories " +
+            "из Mini App. Открой готовое PNG ниже, сохрани его " +
+            "и опубликуй с телефона."
           );
           return;
         }
@@ -841,7 +854,9 @@ function StoryCard({
                   : shareStage === "upload"
                     ? "Загружаем историю…"
                     : "Подготавливаем историю…"
-              : "Поделиться в истории"}
+              : canOpenStoryEditor
+                ? "Поделиться в истории"
+                : "Подготовить PNG истории"}
         </span>
       </button>
       )}
@@ -852,14 +867,21 @@ function StoryCard({
       )}
 
       {canShare && fallbackImageUrl && (
-        <a
-          className="story-fallback-link"
-          href={fallbackImageUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Открыть изображение истории
-        </a>
+        <div className="story-fallback">
+          <a
+            className="story-fallback-link"
+            href={fallbackImageUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Открыть PNG истории
+          </a>
+
+          <p className="story-fallback-hint">
+            Сохрани изображение и опубликуй его
+            через Telegram на телефоне.
+          </p>
+        </div>
       )}
     </>
   );
